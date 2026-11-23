@@ -1,0 +1,114 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>loop / graph 設計、執行紀錄與反思</title><style>
+:root{--bg:#f4f7f9;--ink:#10263b;--sub:#46606f;--line:#b4c5d0;--panel:#fff;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1a24;--ink:#e4edf2;--sub:#9db3c0;--line:#3b5566;--panel:#13232f;color-scheme:dark}}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.75 "Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 20px 64px}
+nav a{margin-right:1em;color:var(--ink)}
+h1,h2,h3{line-height:1.35}a{color:inherit}
+table{border-collapse:collapse;display:block;overflow-x:auto;font-size:15px}
+td,th{border:1px solid var(--line);padding:.4em .7em;text-align:left;vertical-align:top}
+code,pre{background:var(--panel);padding:.1em .3em}pre{padding:.8em;overflow-x:auto}
+hr{border:0;border-top:1px solid var(--line);margin:2em 0}
+</style></head><body><main><nav><a href="index.html">首頁</a><a href="briefing.html">簡報</a><a href="wiki.html">Wiki</a><a href="loop.html">loop 與反思</a></nav><hr><h1>loop / graph 設計、實際執行紀錄、反思</h1>
+<h2>1. 流程圖</h2>
+<pre class="mermaid">flowchart TD
+  A[取得資料：搜尋或使用者提供] --&gt; B[Ingest：寫入 Wiki，標來源、日期、單位]
+  B --&gt; C{檢查 1：日期、單位、完整性、名稱}
+  C -- 不通過 --&gt; A
+  C -- 通過 --&gt; D[查詢 Wiki，整理重點]
+  D --&gt; E{檢查 2：多來源交叉比對、推算值}
+  E -- 有矛盾 --&gt; F[標為待查，進 cross-checks.md]
+  F --&gt; D
+  E -- 一致 --&gt; G[生成教學簡報]
+  G --&gt; H{檢查 3：簡報每個數字回查 Wiki}
+  H -- 找不到或不一致 --&gt; D
+  H -- 通過 --&gt; I[完成：Wiki、簡報、紀錄]
+</pre>
+<h2>2. 文字說明</h2>
+<p>流程：取得資料 → ingest → 檢查 1 → 查詢 Wiki 整理重點 → 檢查 2 → 生成簡報 → 檢查 3。</p>
+<p>哪些步驟會重複執行：
+- 「取得資料 → ingest → 檢查 1」每一篇來源都跑一次，共 5 篇，其中 S5 跑了 2 次（第一次只抓到摘要）。
+- 「整理重點 → 檢查 2」遇到矛盾就回頭，矛盾沒解決就標待查，不寫進簡報結論。</p>
+<p>哪些地方需要檢查或重新生成：
+- 檢查 1：日期對不對、單位是不是千元、內文有沒有完整載入、是哪一家公司。不通過就重新取得或重新 ingest。
+- 檢查 2：不同來源的同一個數字（例如成交金額）要比對；推算值要寫出算式並標「推算」。
+- 檢查 3：簡報裡每個數字都要能在 Wiki 找到。找不到就回到整理重點。</p>
+<p>為什麼這樣設計：台股資料更新很快，來源混雜（新聞、官方統計、財報、券商專欄），而且日期、單位、公司名稱都容易搞混。把檢查放在每個節點的出口，錯誤就不會一路帶到簡報。</p>
+<h2>3. 一次實際執行的結果與檢查紀錄（2026-11-23）</h2>
+<table>
+<thead>
+<tr>
+<th>步驟</th>
+<th>做了什麼</th>
+<th>檢查結果</th>
+<th>回頭？</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>取得資料</td>
+<td>搜尋台股近況</td>
+<td>結果混入 2017、2023、2024、2025 年的舊收盤報導，檢查 1（日期）不通過</td>
+<td>是：只採 2026 日期的資料</td>
+</tr>
+<tr>
+<td>ingest S1、S2、S3</td>
+<td>寫入 Wiki</td>
+<td>S3 單位是千元，已換算成億元；S2 的「漲跌指數」是點數，不換算成 %；驗算 化學生技醫療類＝化學類＋生技醫療類、電子類＝八個子類之和，皆相符</td>
+<td>否</td>
+</tr>
+<tr>
+<td>ingest S4</td>
+<td>寫入 Wiki</td>
+<td>日期 10/8，早於崩跌，標「崩跌前的觀點」</td>
+<td>否</td>
+</tr>
+<tr>
+<td>ingest S5</td>
+<td>寫入 Wiki</td>
+<td>第一次只抓到摘要；標題寫 11 月、更新日是 8/10</td>
+<td>是：使用者貼全文後重新 ingest，以 8/10 為準</td>
+</tr>
+<tr>
+<td>ingest S1（全文）</td>
+<td>使用者貼全文，逐項比對</td>
+<td>所有數字相同；新增成交張數、漲幅前 5 名</td>
+<td>否</td>
+</tr>
+<tr>
+<td>檢查 2：交叉比對</td>
+<td>9 項比對</td>
+<td>4 項已解決或已標註，5 項待查或僅能推算（C1、C5、C6、C7、C8）</td>
+<td>是：矛盾標待查</td>
+</tr>
+<tr>
+<td>C1 追查</td>
+<td>比對成交金額與成交張數</td>
+<td>金額差 1,544.71 億、張數差約 1,173 萬張，缺口約 13.2 元/股，和「類指數不含低價 ETF」相容，未證實</td>
+<td>否</td>
+</tr>
+<tr>
+<td>生成簡報</td>
+<td>7 頁 HTML</td>
+<td>完成</td>
+<td>否</td>
+</tr>
+<tr>
+<td>檢查 3：簡報回查</td>
+<td>程式比對簡報 65 個數字與 Wiki</td>
+<td>64 個在 Wiki 找得到；找不到的 1 個是「差 1,000 倍」的說明用語，不是資料，保留</td>
+<td>否</td>
+</tr>
+</tbody>
+</table>
+<h2>4. 反思</h2>
+<p>我認為取得資料這個節點最容易出錯。這次遇到四種：舊資料混進搜尋結果、網頁內文沒有完整載入、標題與更新日期不一致、財報單位是千元。資料一旦出錯，簡報也會跟著出錯，但因為資料在進入 Wiki 時就檢查過，生成簡報這一步反而沒有出問題。</p>
+<p>發現問題後，我們把檢查前移：在每份來源進入 Wiki 時，就檢查日期、單位、完整性與名稱（檢查 1），而不是等簡報做完才檢查數字（檢查 3）。</p>
+<p>我們因此修改了三個地方：
+1. 新增檢查 1。錯誤都發生在資料進入的時候，越晚發現，修正成本越高。
+2. 新增待查清單。對不上的數字不硬解釋，也不寫進簡報結論，例如成交金額差 1,544.71 億元。
+3. 新增規則：推算值必須標註「推算」並寫出算式，例如用持股比例推算股數。</p>
+<p>還沒解決的問題（記錄在 Wiki 的交叉比對頁）：
+1. 成交金額差異的原因（C1）：11/20 的成交金額，中央社是 8,773.50 億元，證交所各類指數加總是 7,228.79 億元，差 1,544.71 億元。我們推測是類指數不含低價的 ETF，但還沒證實。
+2. 「塑化股」對應哪個指數（C7）：中央社的「塑化股」跌 8.42%，但報導沒有說明對應證交所的塑膠類、化學類，還是兩者，所以無法把證交所的資料對上去。
+3. 9/30 之後大跌對台塑持股評價的影響（C8）：台塑持有南亞、南亞科等股票，財報只到 9/30，不知道之後的大跌會讓 Q4 的評價怎麼變。</p></main><script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script><script>if(window.mermaid){mermaid.initialize({startOnLoad:true,theme:matchMedia("(prefers-color-scheme:dark)").matches?"dark":"default"})}</script></body></html>
